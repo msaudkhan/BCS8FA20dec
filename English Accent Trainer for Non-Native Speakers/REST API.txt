@@ -1,0 +1,141 @@
+from ffmpy import FFmpeg
+import flask
+import werkzeug
+import numpy as np
+import librosa
+from tensorflow.keras.models import load_model
+
+from flask import Flask, request, jsonify
+import noisereduce as nr
+from scipy.io import wavfile
+import numpy as np
+import IPython
+import soundfile
+from pydub import AudioSegment
+from pydub.silence import split_on_silence
+import sys
+
+
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+@app.route('/',methods=['GET','POST'])
+def uploadfile():
+
+    audiofile = flask.request.files['audiofile']   #image is name of the form field containing the file.
+    out = werkzeug.utils.secure_filename(audiofile.filename) #he filename returned is an ASCII only string for maximum portability
+
+    print("\nReceived audio File name : " + audiofile.filename)
+    audiofile.save(out)
+    filename="sfile.wav"
+    ff = FFmpeg(inputs={out: None}, outputs={filename: '-y'})
+    ff.cmd
+    ff.run()
+    remove_noise(filename)
+    if(remove_silence(filename12)==1):
+        mfcc123 = print_prediction(filename12)
+        li=np.round(mfcc123,1,None)
+        return str(li[0])
+    else:
+        return str("[0.0 0.0 0.0 0.0 0.0 0.0]")
+
+
+
+
+
+
+def remove_noise(filename1):
+    rate1, data = wavfile.read(filename1)
+    data = data.astype(np.float32, order='C') / 32768.0
+    # select section of data that is noise
+    noisy_part = data[1000:2000]
+    # perform noise reduction
+    reduced_noise = nr.reduce_noise(audio_clip=data, noise_clip=noisy_part, verbose=False)
+    #IPython.display.Audio(data=reduced_noise, rate=rate1)
+    soundfile.write(filename12, reduced_noise,rate1)
+def remove_silence(filename1):
+    sound = AudioSegment.from_wav(filename1)
+    chunks = split_on_silence(sound,
+                              # must be silent for at least half a second
+                              min_silence_len=500, silence_thresh=-48,
+                              keep_silence=300
+                              )
+    abchunks = 0
+    for i in range(0, len(chunks)):
+        abchunks += chunks[i]
+
+    if (len(chunks)>0):
+        abchunks.export(filename12, format="wav")
+        return 1
+    else:
+        return 0
+def print_prediction(file_name):
+    model = load_model('C:/Users/shabe/FYP_model.h5')
+    # test_2_class.h5
+    # model = load_model('test_2_class.h5')
+
+    mfcc1 = create_mfcc(file_name)
+
+    res_mfcc = resize_mfcc(mfcc1)
+    prediction_feature = standardize_mfcc(res_mfcc)
+
+    prediction_feature = prediction_feature.reshape(-1, 16, 64, 1)
+    #print(model.predict_classes(prediction_feature))
+    prob_tot=model.predict_proba(prediction_feature)
+
+    return prob_tot
+
+
+
+
+# import keras
+
+def wavtomfcc(file_path):
+    wave, sr = librosa.load(file_path, mono=True)
+    mfcc = librosa.feature.mfcc(wave, sr=sr, n_mfcc=13)
+    return mfcc
+
+
+def create_mfcc(file_name):
+    list_of_mfccs = []
+    # file_name = 'D:/UzairDataSet/en/clips/wav/{}.wav'.format(wav)
+    mfcc = wavtomfcc(file_name)
+    list_of_mfccs.append(mfcc)
+    return list_of_mfccs
+
+
+def resize_mfcc(list_of_mfccs):
+    target_size = 64
+    resized_mfcc = [librosa.util.fix_length(mfcc, target_size, axis=1)
+                    for mfcc in list_of_mfccs]
+    resized_mfcc = [np.vstack((np.zeros((3, target_size)), mfcc)) for mfcc in resized_mfcc]
+    X = resized_mfcc
+    return np.array(X)
+
+
+def standardize_mfcc(mfcc):
+    mfcc_mean = mfcc.mean()
+    mfcc_std = mfcc.std()
+    mfcc_std_act = (mfcc - mfcc_mean) / mfcc_std
+    return mfcc_std_act
+
+if __name__ == '__main__':
+    try:
+        port = int(sys.argv[1]) # This is for a command-line input
+    except:
+        port = 12347 # If you don't provide any port the port will be set to 12345.com
+        filename12="file1.wav"
+    app.run(host='0.0.0.0',port=port, debug=True)
+
+'''a='aa.mp4'
+out='mf1.wav'
+ff = FFmpeg(inputs={a: None}, outputs={out: '-y'})
+ff.cmd
+ff.run()
+def wavtomfcc(file_path):
+    wave, sr = librosa.load(file_path, mono=True)
+    mfcc = librosa.feature.mfcc(wave, sr=sr, n_mfcc=13)
+    return mfcc
+b=wavtomfcc(out)
+print(b[0][0])
+'''
